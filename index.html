@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>z(θ) = e^{iθ} + e^{iπθ} Visualization</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        font-family: system-ui, Arial, sans-serif;
+        margin: 0;
+        background: #05070a;
+        color: #e2e8f0;
+        text-align: center;
+      }
+      header {
+        padding: 18px 10px 4px;
+      }
+      h1 {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0 0 4px;
+        letter-spacing: 0.5px;
+      }
+      p {
+        margin: 4px auto 12px;
+        max-width: 680px;
+        font-size: 14px;
+        line-height: 1.4;
+        color: #94a3b8;
+      }
+      canvas {
+        width: min(90vw, 900px);
+        height: min(90vw, 900px);
+        max-width: 900px;
+        max-height: 900px;
+        background: radial-gradient(circle at 50% 50%, #0e1622 0%, #05070a 70%);
+        display: block;
+        margin: 0 auto;
+        border: 1px solid #182433;
+        border-radius: 8px;
+        box-shadow: 0 0 0 1px #0d141d, 0 0 32px -8px #0af;
+      }
+      footer {
+        font-size: 11px;
+        padding: 8px 0 18px;
+        color: #64748b;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: center;
+        margin: 10px 0 14px;
+      }
+      button {
+        background: #0d2538;
+        color: #e2e8f0;
+        border: 1px solid #1e3a52;
+        padding: 6px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        letter-spacing: 0.5px;
+      }
+      button:hover {
+        background: #12324a;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .stat {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        margin: 6px 0 4px;
+        color: #38bdf8;
+      }
+      .formula {
+        font-size: 16px;
+        font-family: "Cambria Math", "Times New Roman", serif;
+        margin-top: 4px;
+        color: #f1f5f9;
+      }
+      .legend {
+        font-size: 12px;
+        margin-top: 6px;
+        color: #94a3b8;
+        max-width: 760px;
+        margin-left: auto;
+        margin-right: auto;
+        line-height: 1.35;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Complex Curve: z(θ) = e^{iθ} + e^{iπθ}</h1>
+      <div class="formula">z(θ) = e^{iθ} + e^{iπθ}</div>
+      <p>
+        This animation plots the complex-valued function z(θ)=e^{iθ}+e^{iπθ}. We
+        keep a fixed angular increment; speeding up draws more steps per frame
+        instead of enlarging the radius or skipping resolution.
+      </p>
+      <div class="controls">
+        <button id="pauseBtn">Pause</button>
+        <button id="resumeBtn" disabled>Resume</button>
+        <button id="clearBtn">Clear</button>
+        <button id="fasterBtn">Faster</button>
+        <button id="slowerBtn">Slower</button>
+        <button id="toggleTrailBtn">Toggle Fade</button>
+        <button id="resetSpeedBtn">Reset Speed</button>
+      </div>
+      <div class="stat" id="stat"></div>
+      <div class="legend">
+        Speed control adjusts steps-per-frame (batching) with constant Δθ=0.003.
+        Radius remains constant; more batches simply advance θ faster while
+        preserving path fidelity.
+      </div>
+    </header>
+    <canvas id="canvas" width="1100" height="1100"></canvas>
+    <footer>
+      Stable angular resolution; dynamic frame batching for speed.
+    </footer>
+    <script>
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      const w = canvas.width,
+        h = canvas.height;
+      const cx = w / 2,
+        cy = h / 2;
+      const pauseBtn = document.getElementById("pauseBtn");
+      const resumeBtn = document.getElementById("resumeBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const fasterBtn = document.getElementById("fasterBtn");
+      const slowerBtn = document.getElementById("slowerBtn");
+      const toggleTrailBtn = document.getElementById("toggleTrailBtn");
+      const resetSpeedBtn = document.getElementById("resetSpeedBtn");
+      const statEl = document.getElementById("stat");
+
+      let theta = 0;
+      const dTheta = 0.003; // fixed small increment
+      let stepsPerFrame = 1; // dynamic speed multiplier
+      let running = true,
+        fade = true,
+        frame = 0,
+        totalSteps = 0;
+      const scale = Math.min(w, h) * 0.45;
+      let lastPoint = null;
+
+      function drawFrameBase() {
+        ctx.save();
+        ctx.strokeStyle = "#13202d";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, scale, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx, cy, scale * 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx - scale * 2.2, cy);
+        ctx.lineTo(cx + scale * 2.2, cy);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - scale * 2.2);
+        ctx.lineTo(cx, cy + scale * 2.2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      function complexCurve(t) {
+        return {
+          x: Math.cos(t) + Math.cos(Math.PI * t),
+          y: Math.sin(t) + Math.sin(Math.PI * t),
+        };
+      }
+      function hueFromAngle(x, y) {
+        const a = Math.atan2(y, x);
+        return (a / (Math.PI * 2) + 0.5) * 360;
+      }
+
+      function integrateSteps(batch) {
+        for (let s = 0; s < batch; s++) {
+          theta += dTheta;
+          totalSteps++;
+          const { x, y } = complexCurve(theta);
+          const px = cx + x * scale,
+            py = cy + y * scale;
+          if (lastPoint) {
+            const hue = hueFromAngle(x, y);
+            ctx.save();
+            ctx.strokeStyle = `hsl(${hue},85%,60%)`;
+            ctx.lineWidth = 1.1;
+            ctx.beginPath();
+            ctx.moveTo(lastPoint.x, lastPoint.y);
+            ctx.lineTo(px, py);
+            ctx.stroke();
+            ctx.strokeStyle = `hsla(${hue},85%,60%,0.25)`;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(lastPoint.x, lastPoint.y);
+            ctx.lineTo(px, py);
+            ctx.stroke();
+            ctx.restore();
+          }
+          lastPoint = { x: px, y: py };
+        }
+      }
+
+      function step() {
+        if (!running) return;
+        frame++;
+        if (fade) {
+          ctx.fillStyle = "rgba(5,7,10,0.06)";
+          ctx.fillRect(0, 0, w, h);
+          drawFrameBase();
+        }
+        integrateSteps(stepsPerFrame);
+        statEl.textContent = `θ: ${theta.toFixed(
+          4
+        )}  Δθ: ${dTheta}  steps/frame: ${stepsPerFrame}  total steps: ${totalSteps}  frame: ${frame}`;
+        requestAnimationFrame(step);
+      }
+
+      drawFrameBase();
+      step();
+
+      pauseBtn.onclick = () => {
+        running = false;
+        pauseBtn.disabled = true;
+        resumeBtn.disabled = false;
+      };
+      resumeBtn.onclick = () => {
+        if (!running) {
+          running = true;
+          pauseBtn.disabled = false;
+          resumeBtn.disabled = true;
+          requestAnimationFrame(step);
+        }
+      };
+      clearBtn.onclick = () => {
+        ctx.clearRect(0, 0, w, h);
+        drawFrameBase();
+        theta = 0;
+        frame = 0;
+        totalSteps = 0;
+        lastPoint = null;
+      };
+      fasterBtn.onclick = () => {
+        stepsPerFrame = Math.min(stepsPerFrame * 2, 4096);
+      };
+      slowerBtn.onclick = () => {
+        stepsPerFrame = Math.max(1, Math.floor(stepsPerFrame / 2));
+      };
+      resetSpeedBtn.onclick = () => {
+        stepsPerFrame = 1;
+      };
+      toggleTrailBtn.onclick = () => {
+        fade = !fade;
+        toggleTrailBtn.textContent = fade ? "Toggle Fade" : "Enable Fade";
+      };
+    </script>
+  </body>
+</html>
